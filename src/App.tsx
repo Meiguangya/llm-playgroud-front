@@ -80,6 +80,27 @@ const Independent: React.FC = () => {
         window.location.pathname = path;
       };
 
+  // 登录状态与用户信息
+  const [user, setUser] = useState<{ username?: string } | null>(null);
+  useEffect(() => {
+    // 检查本地token和用户名
+    const token = localStorage.getItem('access_token');
+    const username = localStorage.getItem('username');
+    if (token && username) {
+      setUser({ username });
+    } else {
+      setUser(null);
+    }
+  }, []);
+
+  // 退出登录
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('username');
+    setUser(null);
+    navigate('/login');
+  };
+
   // ==================== Render =================
   return (
     <>
@@ -134,20 +155,35 @@ const Independent: React.FC = () => {
 
       <div className={styles.layout} style={{ position: 'relative' }}>
         <FunctionMenu />
-        {/* 左下角登录按钮 */}
-        <Button
-          type="primary"
+        {/* 左下角登录/用户信息按钮 */}
+        <div
           style={{
             position: 'absolute',
             left: 24,
             bottom: 24,
             zIndex: 1000,
-            width: 120
+            width: 160,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8
           }}
-          onClick={() => navigate('/login')}
         >
-          登录
-        </Button>
+          {user && user.username ? (
+            <>
+              <span style={{ fontWeight: 500 }}>{user.username}</span>
+              <Button size="small" onClick={handleLogout}>退出登录</Button>
+            </>
+          ) : (
+            <Button
+              type="primary"
+              style={{ width: 120 }}
+              onClick={() => navigate('/login')}
+            >
+              登录
+            </Button>
+          )}
+        </div>
         {/* 菜单页面容器 */}
         <div className={styles.menuPagesWrapper}>
           <Routes>
@@ -204,7 +240,10 @@ const App = () => {
           theme={customTheme}
         >
           <Router>
-            <Independent />
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="*" element={<Independent />} />
+            </Routes>
           </Router>
         </ThemeProvider>
       </AntdApp>
