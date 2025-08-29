@@ -47,8 +47,7 @@ const ChatConversationView: React.FC<ChatConversationViewProps> = ({
   const [inputContent, setInputContent] = useState("");
   // 是否正在加载（发送/接收消息中）
   const [isLoading, setIsLoading] = useState(false);
-  // 当前消息列表
-  const [messages, setMessages] = useState<Message[]>([]);
+  // 不再本地维护消息，直接用 activeConversation?.messages
   // 消息容器 DOM 引用，用于滚动到底部
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +70,17 @@ const ChatConversationView: React.FC<ChatConversationViewProps> = ({
     updateActiveConversation,
   } = useConversationContext();
 
+  // 监听父组件传递的 loading 状态（可用 context 或 props 传递）
+  // 这里用 window 事件总线简单演示
+  const [conversationLoading, setConversationLoading] = useState(false);
+  useEffect(() => {
+    const handler = (e: any) => {
+      setConversationLoading(!!e.detail);
+    };
+    window.addEventListener('conversation-loading', handler);
+    return () => window.removeEventListener('conversation-loading', handler);
+  }, []);
+
   // 用于判断是否首次加载，避免重复处理 URL 参数
   const isFirstLoad = useRef(true);
   // 记录已处理过的 prompt，防止重复发送
@@ -81,37 +91,12 @@ const ChatConversationView: React.FC<ChatConversationViewProps> = ({
     chooseActiveConversation(conversationId);
   }, [conversationId, chooseActiveConversation]);
 
-  // 每次消息变化后自动滚动到底部
+  // 每次 activeConversation?.messages 变化后自动滚动到底部
   useEffect(() => {
     scrollToBottom(messagesContainerRef.current);
-  }, [messages]);
+  }, [activeConversation?.messages]);
 
-  // 从存储的会话中加载消息到 UI
-  useEffect(() => {
-    if (activeConversation) {
-      if (
-        activeConversation.messages &&
-        activeConversation.messages.length > 0
-      ) {
-        // 过滤掉 isLoading 的消息
-        const filteredMessages = activeConversation.messages.filter(
-          (msg) => !(msg as any).isLoading
-        );
-
-        if (filteredMessages.length > 0) {
-          // 转换为 UI 消息格式
-          const uiMessages = mapStoredMessagesToUIMessages(
-            filteredMessages as ChatUiMessage[]
-          );
-          setMessages(uiMessages);
-        } else {
-          setMessages([]);
-        }
-      } else {
-        setMessages([]);
-      }
-    }
-  }, [activeConversation?.id, activeConversation?.messages]);
+  // 不再需要 useEffect 同步本地消息
 
   // 处理 URL 中的 prompt 参数，实现外部跳转自动发消息
   useEffect(() => {
@@ -186,7 +171,7 @@ const ChatConversationView: React.FC<ChatConversationViewProps> = ({
     const userMessageUI: Message = mapStoredMessagesToUIMessages([
       userMessage,
     ])[0];
-    setMessages((prev) => [...prev, userMessageUI]);
+  // 直接依赖 activeConversation?.messages，不再 setMessages
 
     // 4. 定义发送请求方法，流式处理 AI 回复
     const sendRequest = async (
@@ -584,17 +569,19 @@ const ChatConversationView: React.FC<ChatConversationViewProps> = ({
       <div className={styles.container}>
         {/* 消息列表区域 */}
         <div ref={messagesContainerRef} className={styles.messagesContainer}>
-          {messages.length === 0 && !conversationId ? (
+          {conversationLoading ? (
+            <div style={{padding: 32, textAlign: 'center', color: '#aaa'}}>正在加载会话...</div>
+          ) : (!activeConversation?.messages || activeConversation.messages.length === 0) && !conversationId ? (
             <ResponseBubble
               content="你好，请问有什么可以帮你的吗？"
               timestamp={Date.now()}
             />
           ) : (
-            messages.map((message) =>
-              message.sender === "user" ? (
+            (activeConversation?.messages || []).map((message, idx) =>
+              message.role === "user" ? (
                 <RequestBubble
-                  key={message.id}
-                  content={message.text}
+                  key={message.id || idx}
+                  content={message.content}
                   timestamp={message.timestamp}
                   onEditConfirm={(newContent) =>
                     handleEditConfirm(message.timestamp, newContent)
@@ -602,8 +589,8 @@ const ChatConversationView: React.FC<ChatConversationViewProps> = ({
                 />
               ) : (
                 <ResponseBubble
-                  key={message.id}
-                  content={message.text}
+                  key={message.id || idx}
+                  content={message.content}
                   timestamp={message.timestamp}
                   isError={message.isError}
                   onReload={() => handleReloadMessage(message.timestamp)}

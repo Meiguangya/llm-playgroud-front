@@ -1,3 +1,39 @@
+import { apiCreateConversation } from "../api/conversation";
+/**
+ * 异步：通过后端接口新建会话，返回带后端ID的会话对象
+ * @param type - 对话类型
+ * @param modelName - 模型名
+ * @param title - 会话标题
+ * @returns 新创建的会话对象（或null）
+ */
+export const createConversationWithApi = async (
+  type: MenuPage,
+  modelName: string,
+  title: string
+): Promise<Conversation | null> => {
+  try {
+    const res = await apiCreateConversation({ title, model_name: modelName });
+    console.log('[createConversationWithApi] apiCreateConversation 返回:', res);
+    if (res.code === 200 && res.data?.id) {
+      const now = Date.now();
+      const newConversation: Conversation = {
+        id: res.data.id,
+        title: res.data.title,
+        type,
+        messages: [],
+        createdAt: now,
+        capabilities: { deepThink: false, onlineSearch: false },
+      };
+      console.log('[createConversationWithApi] newConversation:', newConversation);
+      return newConversation;
+    }
+    console.warn('[createConversationWithApi] 未获取到有效id:', res);
+    return null;
+  } catch (e) {
+    console.error('新建会话接口异常', e);
+    return null;
+  }
+};
 import { atom, useAtom } from "jotai";
 import { MenuPage } from "./functionMenu.store";
 import { GetProp } from "antd";
@@ -19,6 +55,7 @@ export interface GeneratedImage {
  * 聊天消息的数据结构
  */
 export interface ChatMessage {
+  id?: string; // 兼容后端消息唯一标识
   role: "user" | "assistant";
   content: string;
   timestamp: number;
@@ -263,15 +300,18 @@ export const useConversationContext = () => {
    * @param content - 用户输入内容，可选，用于生成标题
    * @returns 新创建的对话会话对象
    */
-  const createConversation = (
+  /**
+   * 新建会话，优先用后端生成ID
+   * @param type
+   * @param content
+   * @param modelName
+   */
+  const createConversation = async (
     type: MenuPage,
-    // items: GetProp<typeof Bubble.List, "items">,
-    content?: string
+    content?: string,
+    modelName?: string
   ) => {
-    // UUID
-    const timestamp = Date.now();
     let title = "";
-
     if (content && content.trim()) {
       const maxLength = 15;
       title =
@@ -279,17 +319,35 @@ export const useConversationContext = () => {
           ? `${content.trim().substring(0, maxLength)}...`
           : content.trim();
     } else {
+      const timestamp = Date.now();
       title = `对话 ${timestamp.toString().slice(-8)}`;
     }
 
-    const newConversation: Conversation = {
-      id: timestamp.toString(),
-      title,
-      type,
-      messages: [],
-      createdAt: timestamp,
-      capabilities: { ...aiCapabilities }, // 保存当前能力设置
-    };
+    // 优先用后端接口
+    let newConversation: Conversation | null = null;
+    try {
+      // modelName 可根据实际业务传递
+      modelName = 'qwen-2.5'
+      if (modelName) {
+        newConversation = await createConversationWithApi(type, modelName, title);
+      }
+    } catch (e) {
+      // ignore
+    }
+    // 如果后端失败则本地生成
+    if (!newConversation) {
+      const timestamp = Date.now();
+      newConversation = {
+        id: timestamp.toString(),
+        title,
+        type,
+        messages: [],
+        createdAt: timestamp,
+        capabilities: { ...aiCapabilities },
+      };
+      console.warn('[createConversation] 使用本地生成的会话:', newConversation);
+    }
+    console.log('[createConversation] 最终 newConversation:', newConversation);
     setConversations([newConversation, ...conversations]);
     setActiveConversation(newConversation);
     return newConversation;
@@ -578,6 +636,7 @@ export const useConversationContext = () => {
 
   return {
     conversations,
+    setConversations, // 新增暴露
     activeConversation,
     aiCapabilities,
     updateCapability,

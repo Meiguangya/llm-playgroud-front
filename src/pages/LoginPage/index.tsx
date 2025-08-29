@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useInitConversations } from '../../hooks/useInitConversations';
 import { Button, Input, Form, Tabs, Typography, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import RegisterForm from "./RegisterForm";
@@ -7,6 +8,7 @@ const { TabPane } = Tabs;
 
 const LoginPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState("login");
+  const { initConversations } = useInitConversations();
 
   const navigate = useNavigate();
   const onFinishLogin = async (values: any) => {
@@ -30,6 +32,8 @@ const LoginPage: React.FC = () => {
           localStorage.setItem('username', data.data.user.username);
         }
         message.success(data.message || '登录成功');
+        // 登录成功后安全初始化 conversations
+        await initConversations();
         setTimeout(() => {
           navigate('/');
         }, 800);

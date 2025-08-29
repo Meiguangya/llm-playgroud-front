@@ -19,7 +19,8 @@ import {
   Tooltip,
   Modal,
 } from "antd";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useRef as useReactRef } from "react";
+import { getMessagesByConversationId, MessageItem } from '../../../api/message';
 import { useStyle } from "./style";
 import { useModelConfigContext } from "../../../stores/modelConfig.store";
 import {
@@ -44,6 +45,7 @@ const FunctionMenu = () => {
   const { menuCollapsed, toggleMenuCollapsed } = useFunctionMenuStore();
   const {
     conversations,
+    setConversations,
     activeConversation,
     chooseActiveConversation,
     deleteConversation,
@@ -52,6 +54,18 @@ const FunctionMenu = () => {
     updateActiveConversation,
     createConversation,
   } = useConversationContext();
+  // 退出登录逻辑
+  const handleLogout = () => {
+    // 清空会话和激活会话
+    setConversations([]);
+    clearActiveConversation();
+    // 清除本地 token/username
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('username');
+    message.success('已退出登录');
+    // 可选：跳转到登录页
+    // navigate('/login');
+  };
   const { initModelOptionList, modelOptionList, chooseModel, currentModel } =
     useModelConfigContext();
   const { chooseActiveMenuPage } = useFunctionMenuStore();
@@ -68,15 +82,19 @@ const FunctionMenu = () => {
     initModelOptionList();
   }, []);
 
-  const onAddConversation = (item: FunctionMenuItem) => {
-    const newConversation = createConversation(item.key as MenuPage, []);
-    if (newConversation) {
+  const onAddConversation = async (item: FunctionMenuItem) => {
+    const newConversation = await createConversation(item.key as MenuPage, '');
+    if (newConversation && newConversation.id) {
       chooseActiveConversation(newConversation.id);
       navigate(`/${item.key}/${newConversation.id}`);
     }
   };
 
-  const onConversationClick = (conversationId: string) => {
+  // 消息缓存，避免重复请求
+  const messagesCache = useReactRef<{ [id: string]: import('../../../stores/conversation.store').ChatMessage[] }>({});
+
+  const [conversationLoading, setConversationLoading] = useState(false);
+  const onConversationClick = async (conversationId: string) => {
     try {
       if (editingConversationId && editingConversationId !== conversationId) {
         setEditingConversationId(null);
@@ -87,16 +105,31 @@ const FunctionMenu = () => {
       );
 
       if (conversation) {
-        // 先清除activeConversation，强制触发重新渲染
-        if (activeConversation?.id !== conversationId) {
-          clearActiveConversation();
+        setConversationLoading(true);
+        window.dispatchEvent(new CustomEvent('conversation-loading', { detail: true }));
+        // 优先查缓存
+        let messages = messagesCache.current[conversationId];
+        if (!messages || messages.length === 0) {
+          // 拉取后端消息
+          const rawMsgs: MessageItem[] = await getMessagesByConversationId(conversationId);
+          messages = rawMsgs.map(msg => ({
+            id: msg.id, // 保留后端唯一 id
+            role: msg.role === 'human' ? 'user' : 'assistant',
+            content: msg.content,
+            timestamp: Date.now(), // 可根据后端扩展
+          }));
+          messagesCache.current[conversationId] = messages;
         }
-
+        updateActiveConversation({ ...conversation, messages });
         chooseActiveMenuPage(conversation.type);
         chooseActiveConversation(conversationId);
         navigate(`/${conversation.type}/${conversationId}`);
+        setConversationLoading(false);
+        window.dispatchEvent(new CustomEvent('conversation-loading', { detail: false }));
       }
     } catch (error) {
+      setConversationLoading(false);
+      window.dispatchEvent(new CustomEvent('conversation-loading', { detail: false }));
       console.error("处理会话点击出错:", error);
     }
   };
@@ -147,6 +180,7 @@ const FunctionMenu = () => {
 
   return (
     <>
+      {/* 会话切换 loading 状态传递给 ChatConversationView 作为 props，或用全局 context 也可 */}
       {menuCollapsed && (
         <Button
           className={styles.collapsedMenuBtn}
