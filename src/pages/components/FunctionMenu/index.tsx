@@ -155,10 +155,10 @@ const FunctionMenu = () => {
     }, 50);
   };
 
-  const saveTitle = (conversationId: string, e?: React.MouseEvent) => {
+  const saveTitle = async (conversationId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (editingTitle.trim()) {
-      updateConversationTitle(conversationId, editingTitle.trim());
+      await updateConversationTitle(conversationId, editingTitle.trim());
     }
     setEditingConversationId(null);
   };
@@ -309,7 +309,7 @@ const FunctionMenu = () => {
                         danger
                         className={styles.deleteButton}
                         icon={<DeleteOutlined />}
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
                           // if (conversations.length <= 1) {
                           //   message.info("至少需要保留一个会话");
@@ -320,11 +320,11 @@ const FunctionMenu = () => {
                             const type = activeConversation.type;
                             navigate(`/${type}`);
                             setTimeout(
-                              () => deleteConversation(conversation.id),
+                              async () => { await deleteConversation(conversation.id); },
                               100
                             );
                           } else {
-                            deleteConversation(conversation.id);
+                            await deleteConversation(conversation.id);
                           }
                         }}
                       />

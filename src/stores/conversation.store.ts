@@ -39,6 +39,8 @@ import { MenuPage } from "./functionMenu.store";
 import { GetProp } from "antd";
 import { Bubble } from "@ant-design/x";
 import { useEffect, useRef } from "react";
+import { updateConversationTitleApi } from "../api/conversation";
+import { deleteConversationApi } from "../api/conversation";
 
 /**
  * 生成图像的数据结构
@@ -357,7 +359,15 @@ export const useConversationContext = () => {
    * 删除指定ID的对话会话
    * @param conversationId - 要删除的对话ID
    */
-  const deleteConversation = (conversationId: string) => {
+  const deleteConversation = async (conversationId: string) => {
+    // 先调后端接口
+    const ok = await deleteConversationApi(conversationId);
+    if (!ok) {
+      // 可选：弹窗提示失败
+      console.error("后端会话删除失败");
+      return;
+    }
+    // 本地同步
     setConversations(
       conversations.filter((conv) => conv.id !== conversationId)
     );
@@ -417,19 +427,25 @@ export const useConversationContext = () => {
    * @param conversationId - 要更新标题的对话ID
    * @param newTitle - 新的标题
    */
-  const updateConversationTitle = (
+  const updateConversationTitle = async (
     conversationId: string,
     newTitle: string
   ) => {
     if (!newTitle.trim()) return; // 不允许空标题
 
+    // 先调用后端接口
+    const ok = await updateConversationTitleApi(conversationId, newTitle);
+    if (!ok) {
+      // 可选：弹窗提示失败
+      console.error("后端会话标题更新失败");
+      return;
+    }
+
+    // 本地同步
     const updatedConversations = conversations.map((conv) =>
       conv.id === conversationId ? { ...conv, title: newTitle } : conv
     );
-
     setConversations(updatedConversations);
-
-    // 如果是当前活跃的对话，也更新 activeConversation
     if (activeConversation?.id === conversationId) {
       setActiveConversation({ ...activeConversation, title: newTitle });
     }
