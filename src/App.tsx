@@ -33,6 +33,7 @@ import { useTheme } from "./hooks/useTheme";
 import { ThemeProvider } from "antd-style";
 import TipsModalComponent from "./pages/components/TipsModal";
 import { useConversationContext } from "./stores/conversation.store";
+import { handleLogout as handleLogoutUtil } from './utils/logout';
 
 // 定义深色主题和浅色主题的算法
 import darkAlgorithm from "antd/es/theme/themes/dark";
@@ -96,14 +97,16 @@ const Independent: React.FC = () => {
   }, []);
 
   // 退出登录
-  const handleLogout = () => {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('username');
-  localStorage.removeItem('app_conversations'); // 清除本地会话缓存
-  setUser(null);
-  setConversations([]);
-  clearActiveConversation();
-  navigate('/login');
+  const handleLogout = async () => {
+    await handleLogoutUtil(() => {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('username');
+      localStorage.removeItem('app_conversations'); // 清除本地会话缓存
+      setUser(null);
+      setConversations([]);
+      clearActiveConversation();
+      navigate('/login');
+    });
   };
 
   // ==================== Render =================

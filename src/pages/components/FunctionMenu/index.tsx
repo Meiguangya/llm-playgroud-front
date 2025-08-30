@@ -54,18 +54,7 @@ const FunctionMenu = () => {
     updateActiveConversation,
     createConversation,
   } = useConversationContext();
-  // 退出登录逻辑
-  const handleLogout = () => {
-    // 清空会话和激活会话
-    setConversations([]);
-    clearActiveConversation();
-    // 清除本地 token/username
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('username');
-    message.success('已退出登录');
-    // 可选：跳转到登录页
-    // navigate('/login');
-  };
+
   const { initModelOptionList, modelOptionList, chooseModel, currentModel } =
     useModelConfigContext();
   const { chooseActiveMenuPage } = useFunctionMenuStore();
